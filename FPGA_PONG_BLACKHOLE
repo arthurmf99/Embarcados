@@ -354,8 +354,8 @@ void variation_blackhole_update(GameState* state, unsigned int keys) {
     // Aplica a gravidade do buraco negro
     int vec_x = state->black_hole.x - state->ball.x;
     int vec_y = state->black_hole.y - state->ball.y;
-    state->ball.vx += (vec_x >> 10);
-    state->ball.vy += (vec_y >> 10);
+    state->ball.vx += (vec_x >> 11);
+    state->ball.vy += (vec_y >> 11);
 
     state->ball.x += state->ball.vx; state->ball.y += state->ball.vy;
     int ball_x = state->ball.x >> F_BITS, ball_y = state->ball.y >> F_BITS;
