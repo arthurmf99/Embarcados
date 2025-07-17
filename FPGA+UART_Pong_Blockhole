@@ -1,5 +1,5 @@
 // ====================================================================
-// ==    PONG COM VARIACOES - V3.6 UNIFICADO (GRAVIDADE AJUSTADA)  ==
+// ==    PONG COM VARIACOES - V3.8 UNIFICADO (RAQUETES GIGANTES)   ==
 // ====================================================================
 //
 // INSTRUCOES DE COMPILACAO:
@@ -55,6 +55,8 @@
 #define TRANSITION_TICKS_PER_SECOND 30
 #define RESTART_DELAY (3 * FRAMES_PER_SECOND)
 #define TRANSITION_INTERVAL (3 * TRANSITION_TICKS_PER_SECOND)
+#define PADDLE_WIDTH_NORMAL 40
+#define PADDLE_WIDTH_LAVA (PADDLE_WIDTH_NORMAL * 3)
 
 // --- ESTADOS DO JOGO ---
 typedef enum {
@@ -147,7 +149,7 @@ const unsigned char seven_seg_digits[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 
 const GameVariation game_variations[GAME_VARIATIONS_COUNT] = {
     { "JOGO PADRAO", "O sorvete de baunilha dos jogos", &variation_standard_init, &variation_standard_update, &variation_standard_check_defeat },
     { "CONTROLES INVERTIDOS", "Esquerda vira direita", &variation_standard_init, &variation_inverted_update, &variation_standard_check_defeat },
-    { "A BOLA EH LAVA", "Nao a deixe tocar em voce", &variation_lava_init, &variation_lava_update, &variation_lava_check_defeat },
+    { "A BOLA EH LAVA", "Agora voce eh um alvo facil", &variation_lava_init, &variation_lava_update, &variation_lava_check_defeat },
     { "BURACO NEGRO", "Nao eh tao pesado quanto sua... consciencia", &variation_blackhole_init, &variation_blackhole_update, &variation_standard_check_defeat }
 };
 
@@ -362,7 +364,14 @@ void increase_speed(GameState* state) {
 }
 
 // --- IMPLEMENTACAO DAS VARIACOES ---
-void variation_standard_init(GameState* state) { state->ball_color = WHITE; }
+void variation_standard_init(GameState* state) {
+    state->ball_color = WHITE;
+    state->player1.w = PADDLE_WIDTH_NORMAL;
+    state->player2.w = PADDLE_WIDTH_NORMAL;
+    // Recenter paddles
+    state->player1.x = (VGA_VISIBLE_WIDTH / 2 - state->player1.w / 2) << F_BITS;
+    state->player2.x = (VGA_VISIBLE_WIDTH / 2 - state->player2.w / 2) << F_BITS;
+}
 void variation_standard_update(GameState* state, int p1_left, int p1_right, int p2_left, int p2_right) {
     if (p1_left) state->player1.x -= state->player_speed_fixed;
     if (p1_right) state->player1.x += state->player_speed_fixed;
@@ -405,7 +414,14 @@ void variation_inverted_update(GameState* state, int p1_left, int p1_right, int 
         increase_speed(state);
     }
 }
-void variation_lava_init(GameState* state) { state->ball_color = RED; }
+void variation_lava_init(GameState* state) {
+    state->ball_color = RED;
+    state->player1.w = PADDLE_WIDTH_LAVA;
+    state->player2.w = PADDLE_WIDTH_LAVA;
+    // Recenter paddles
+    state->player1.x = (VGA_VISIBLE_WIDTH / 2 - state->player1.w / 2) << F_BITS;
+    state->player2.x = (VGA_VISIBLE_WIDTH / 2 - state->player2.w / 2) << F_BITS;
+}
 void variation_lava_update(GameState* state, int p1_left, int p1_right, int p2_left, int p2_right) {
     if (p1_left) state->player1.x -= state->player_speed_fixed;
     if (p1_right) state->player1.x += state->player_speed_fixed;
@@ -428,7 +444,7 @@ int variation_lava_check_defeat(GameState* state) {
     return 0;
 }
 void variation_blackhole_init(GameState* state) {
-    state->ball_color = WHITE;
+    variation_standard_init(state); // Garante que as raquetes tenham tamanho normal
     state->black_hole.w = 15;
     state->black_hole.h = 15;
     state->black_hole.y = (VGA_VISIBLE_HEIGHT / 2 - state->black_hole.h / 2) << F_BITS;
@@ -441,7 +457,6 @@ void variation_blackhole_update(GameState* state, int p1_left, int p1_right, int
     if (p2_left) state->player2.x -= state->player_speed_fixed;
     if (p2_right) state->player2.x += state->player_speed_fixed;
     
-    // Fisica da gravidade do buraco negro
     int vec_x = state->black_hole.x - state->ball.x;
     int vec_y = state->black_hole.y - state->ball.y;
     int vec_x_pixels = vec_x >> F_BITS;
@@ -449,9 +464,14 @@ void variation_blackhole_update(GameState* state, int p1_left, int p1_right, int
     int dist_sq = vec_x_pixels * vec_x_pixels + vec_y_pixels * vec_y_pixels;
     if (dist_sq < 25) dist_sq = 25;
 
-    int gravity_constant = 1; // Forca reduzida
+    int gravity_constant = 2; 
+    int inertial_constant = 1;
+
     state->ball.vx += (gravity_constant * vec_x) / dist_sq;
     state->ball.vy += (gravity_constant * vec_y) / dist_sq;
+
+    state->ball.vx += (inertial_constant * -vec_y) / dist_sq;
+    state->ball.vy += (inertial_constant * vec_x) / dist_sq;
 
     state->ball.x += state->ball.vx; state->ball.y += state->ball.vy;
     int ball_x = state->ball.x >> F_BITS, ball_y = state->ball.y >> F_BITS;
@@ -470,15 +490,15 @@ void variation_blackhole_update(GameState* state, int p1_left, int p1_right, int
 
 // --- LOGICA DE ESTADO DO JOGO ---
 void reset_game_positions(GameState* state) {
-    state->player1.w = 40; state->player1.h = 5;
-    state->player1.x = (VGA_VISIBLE_WIDTH / 2 - state->player1.w / 2) << F_BITS;
+    state->player1.h = 5;
+    state->player2.h = 5;
     state->player1.y = 10 << F_BITS;
-    state->player2.w = 40; state->player2.h = 5;
-    state->player2.x = (VGA_VISIBLE_WIDTH / 2 - state->player2.w / 2) << F_BITS;
     state->player2.y = (VGA_VISIBLE_HEIGHT - 10 - state->player2.h) << F_BITS;
+    
     state->ball.w = 6; state->ball.h = 6;
     state->ball.x = (VGA_VISIBLE_WIDTH / 2 - state->ball.w / 2) << F_BITS;
     state->ball.y = (VGA_VISIBLE_HEIGHT / 2 - state->ball.h / 2) << F_BITS;
+    
     state->player_speed_fixed = 2 << F_BITS;
     state->ball_vx_base = (1 << F_BITS) + (1 << (F_BITS - 1));
     state->ball_vy_base = (1 << F_BITS);
